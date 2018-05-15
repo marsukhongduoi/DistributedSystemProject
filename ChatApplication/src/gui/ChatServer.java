@@ -17,7 +17,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+import javax.swing.table.DefaultTableModel;
 import lib.*;
+import model.Participant;
 
 /**
  *
@@ -28,19 +35,94 @@ public class ChatServer extends javax.swing.JFrame {
     /**
      * Creates new form SendFileServer
      */
-    ServerSocket serverSocket = null;
-    FileInputStream fileInputStream = null;
-    BufferedInputStream bufferedInputStream = null;
-    BufferedOutputStream bufferedOutputStream = null;
-    DataOutputStream dataOutputStream = null;
+    private ServerSocket serverSocket = null;
+    private FileInputStream fileInputStream = null;
+    private BufferedInputStream bufferedInputStream = null;
+    private BufferedOutputStream bufferedOutputStream = null;
+    private DataOutputStream dataOutputStream = null;
     private CryptoData hostCrypto;
     private PublicKey hostPubKey;
     private PrivateKey hostPrivateKey;
+    private Map<String, Participant> userList;
 
     public ChatServer() {
         initComponents();
-        hostCrypto = new CryptoData();
         setButtonState(true);
+        userList = new HashMap<>();
+    }
+
+    public void removeUser(String username) {
+        userList.remove(username);
+    }
+
+    public void setUserList(String username, Participant p) {
+        this.userList.put(username, p);
+    }
+
+    public Map<String, Participant> getUserList() {
+        return userList;
+    }
+
+    public Participant getSpecificUser(String username) {
+        return userList.get(username);
+    }
+
+    private void removeInfoFromTable(String username) {
+        DefaultTableModel model = (DefaultTableModel) tbUsers.getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            String user = model.getValueAt(0, i).toString();
+            if (username.equals(username)) {
+                model.removeRow(i);
+            }
+        }
+    }
+
+    private void updateTableInfo() {
+        DefaultTableModel model = (DefaultTableModel) tbUsers.getModel();
+        model.setRowCount(0);
+
+    }
+
+    void sendPackage(Socket sock, String username) {
+        try {
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(sock.getOutputStream());
+            DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
+            dataOutputStream.writeUTF("PING");
+            dataOutputStream.flush();
+            txtNotice.append("Ping to " + username + "\n");
+        } catch (IOException ex) {
+
+        }
+    }
+
+    private void pingToAllClient() {
+        Participant participant = null;
+        Socket socket = null;
+
+        if (!userList.isEmpty()) {
+            Iterator it = userList.entrySet().iterator();
+            while (it.hasNext()) {
+                try {
+                    Map.Entry pair = (Map.Entry) it.next();
+                    participant = (Participant) pair.getValue();
+                    socket = new Socket(participant.getIp(), participant.getPort());
+                    sendPackage(socket, participant.getUsername());
+                } catch (IOException ex) {
+                    removeInfoFromTable(participant.getUsername());
+                    removeUser(participant.getUsername());
+                    txtNotice.append(participant.getUsername() + " has disconnected\n");
+                }
+            }
+        }
+    }
+
+    private void pingSchedule() {
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            public void run() {
+                pingToAllClient();
+            }
+        }, 300000, 300000);
     }
 
     byte[] readByteFromFile(File file) {
@@ -75,23 +157,6 @@ public class ChatServer extends javax.swing.JFrame {
         }
     }
 
-    void SendRequest(Socket sock) {
-        try {
-            bufferedOutputStream = new BufferedOutputStream(sock.getOutputStream());
-            dataOutputStream = new DataOutputStream(bufferedOutputStream);
-            String notify = "Server: Please send information about IP and port.\n";
-            dataOutputStream.writeUTF("REQUEST");
-            dataOutputStream.writeUTF(notify);
-            dataOutputStream.flush();
-            if (hostCrypto.getPublickey() != null) {
-                dataOutputStream.writeInt(hostCrypto.getPublickey().getEncoded().length);
-                dataOutputStream.write(hostCrypto.getPublickey().getEncoded());
-                dataOutputStream.flush();
-            }
-        } catch (IOException ex) {
-        }
-    }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -115,6 +180,7 @@ public class ChatServer extends javax.swing.JFrame {
         jScrollPane2 = new javax.swing.JScrollPane();
         tbUsers = new javax.swing.JTable();
         btnExport = new javax.swing.JButton();
+        btnPing = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setResizable(false);
@@ -252,9 +318,17 @@ public class ChatServer extends javax.swing.JFrame {
         );
 
         btnExport.setText("Export key");
+        btnExport.setEnabled(false);
         btnExport.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnExportActionPerformed(evt);
+            }
+        });
+
+        btnPing.setText("Ping");
+        btnPing.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnPingActionPerformed(evt);
             }
         });
 
@@ -266,9 +340,11 @@ public class ChatServer extends javax.swing.JFrame {
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
-                        .addGap(168, 168, 168)
+                        .addGap(75, 75, 75)
+                        .addComponent(btnPing)
+                        .addGap(18, 18, 18)
                         .addComponent(btnExport)
-                        .addGap(0, 105, Short.MAX_VALUE))
+                        .addGap(0, 125, Short.MAX_VALUE))
                     .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -288,7 +364,9 @@ public class ChatServer extends javax.swing.JFrame {
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btnExport)))
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(btnExport)
+                            .addComponent(btnPing))))
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
@@ -307,7 +385,7 @@ public class ChatServer extends javax.swing.JFrame {
         try {
             serverSocket = new ServerSocket(port);
             hostCrypto = new CryptoData(2048);
-            new Thread(new ServerThread(serverSocket, txtNotice, tbUsers, hostCrypto)).start();
+            new Thread(new ServerThread(serverSocket, txtNotice, tbUsers, hostCrypto, this)).start();
             txtNotice.setText("Server is live now\n");
             setButtonState(false);
             txtIP.setEnabled(false);
@@ -363,7 +441,7 @@ public class ChatServer extends javax.swing.JFrame {
 
     void createDir(String path) {
         File filePath = new File(path);
-        if(!filePath.exists()) {
+        if (!filePath.exists()) {
             filePath.mkdirs();
         }
     }
@@ -375,6 +453,11 @@ public class ChatServer extends javax.swing.JFrame {
         File pubkeyFile = new File(path + "\\serverpubkey.txt");
         hostCrypto.exportPublicKeyToFile(pubkeyFile);
     }//GEN-LAST:event_btnExportActionPerformed
+
+    private void btnPingActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnPingActionPerformed
+        // TODO add your handling code here:
+        pingSchedule();
+    }//GEN-LAST:event_btnPingActionPerformed
 
     /**
      * @param args the command line arguments
@@ -417,6 +500,7 @@ public class ChatServer extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton btnDisconnect;
     private javax.swing.JButton btnExport;
+    private javax.swing.JButton btnPing;
     private javax.swing.JButton btnStart;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;

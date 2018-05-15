@@ -5,6 +5,7 @@
  */
 package lib;
 
+import gui.ChatServer;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -21,33 +22,18 @@ public class ServerThread implements Runnable {
     private Map<String, Participant> userList;
     private JTextArea JNotify;
     private JTable JTblUser;
-
+    private ChatServer chatServer;
+    
     public ServerThread() {
 
     }
 
-    public ServerThread(ServerSocket serverSocket, JTextArea JNotify, JTable JTblUser, CryptoData hostCrypto) {
+    public ServerThread(ServerSocket serverSocket, JTextArea JNotify, JTable JTblUser, CryptoData hostCrypto, ChatServer chatServer) {
         this.JNotify = JNotify;
         this.JTblUser = JTblUser;
         this.serverSocket = serverSocket;
         this.hostCrypto = hostCrypto;
-        userList = new HashMap();
-    }
-
-    public void removeUser(String username) {
-        userList.remove(username);
-    }
-
-    public void setUserList(String username, Participant p) {
-        this.userList.put(username, p);
-    }
-
-    public Map<String, Participant> getUserList() {
-        return userList;
-    }
-
-    public Participant getSpecificUser(String username) {
-        return userList.get(username);
+        this.chatServer = chatServer;
     }
 
     @Override
@@ -55,7 +41,7 @@ public class ServerThread implements Runnable {
         while (true) {
             try {
                 Socket sock = serverSocket.accept();
-                new Thread(new TransferThread(sock, this, this.JNotify, this.JTblUser, hostCrypto)).start();
+                new Thread(new TransferThread(sock, this, this.JNotify, this.JTblUser, hostCrypto, this.chatServer)).start();
             } catch (IOException ex) {
 
             }

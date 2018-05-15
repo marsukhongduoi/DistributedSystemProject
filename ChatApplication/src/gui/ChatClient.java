@@ -299,6 +299,21 @@ public class ChatClient extends javax.swing.JFrame {
 
         }
     }
+    
+    public void replyPing(String username) {
+        try {
+            mainSock = new Socket(txtSIP.getText(), Integer.parseInt(txtSPort.getText()));
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(mainSock.getOutputStream());
+            DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
+            dataOutputStream.writeUTF("PING");
+            dataOutputStream.writeUTF(username);
+            txtHistory.append("Reply ping to server\n");
+            dataOutputStream.close();
+            setSendingControlState(false);
+        } catch (IOException ex) {
+
+        }
+    }
 
     String formatFileSize(long size) {
         String hrsize = null;
@@ -878,6 +893,9 @@ public class ChatClient extends javax.swing.JFrame {
             // TODO add your handling code here:
             mainSock.close();
             setServerButtonState(true);
+            txtSIP.setEnabled(true);
+            txtSPort.setEnabled(true);
+            setSendingControlState(false);
         } catch (IOException ex) {
 
         }

@@ -3,9 +3,12 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/model/Participant.java</file>
+            <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/lib/ServerThread.java</file>
+            <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/lib/ReceiveThread.java</file>
             <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/lib/TransferThread.java</file>
             <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/gui/ChatClient.java</file>
+            <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/lib/ClientThread.java</file>
+            <file>file:/D:/Softwares%20and%20Works/Project/Netbeans/Socket/Server-Client/ChatApplication/src/gui/ChatServer.java</file>
         </group>
     </open-files>
 </project-private>

@@ -5,6 +5,7 @@
  */
 package lib;
 
+import gui.ChatServer;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -39,23 +40,24 @@ public class TransferThread implements Runnable {
     private JTable JTblUser;
 
     private CryptoData hostCrypto;
+    private ChatServer chatServer;
 
     public TransferThread() {
     }
 
-    public TransferThread(Socket sock, ServerThread serverThread, JTextArea JNotify, JTable JTblUser, CryptoData hostCrypto) {
+    public TransferThread(Socket sock, ServerThread serverThread, JTextArea JNotify, JTable JTblUser, CryptoData hostCrypto, ChatServer chatServer) {
         this.sock = sock;
         this.serverThread = serverThread;
         this.JNotify = JNotify;
         this.JTblUser = JTblUser;
         this.hostCrypto = hostCrypto;
+        this.chatServer = chatServer;
     }
 
     private void sendMess(String message, Socket s) {
         try {
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(s.getOutputStream());
             DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
-            
 
             dataOutputStream.writeUTF("MESS");
             dataOutputStream.writeUTF(message);
@@ -66,22 +68,8 @@ public class TransferThread implements Runnable {
         }
     }
 
-//    private void sendPulicKey(Socket sock, String username) {
-//        try {
-//            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(sock.getOutputStream());
-//            DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
-//            dataOutputStream.writeUTF("KEY");
-//            dataOutputStream.writeInt(hostCrypto.getPublickey().getEncoded().length);
-//            dataOutputStream.write(hostCrypto.getPublickey().getEncoded());
-//            JNotify.append("Sending public key to " + username + "\n");
-//            dataOutputStream.close();
-//        } catch (IOException ex) {
-//
-//        }
-//    }
-
     private void BroadcastMessage(String message, String username) {
-        Map<String, Participant> userList = serverThread.getUserList();
+        Map<String, Participant> userList = chatServer.getUserList();
         Participant participant = null;
         Socket socket = null;
 
@@ -151,7 +139,7 @@ public class TransferThread implements Runnable {
 
     private void getList(String username) {
         try {
-            Map<String, Participant> userList = serverThread.getUserList();
+            Map<String, Participant> userList = chatServer.getUserList();
             Participant participant = userList.get(username);
             Socket socket = new Socket(participant.getIp(), participant.getPort());
             sendObject(socket, userList);
@@ -159,6 +147,19 @@ public class TransferThread implements Runnable {
         } catch (IOException ex) {
             System.out.println(ex);
         }
+    }
+
+    private boolean checkUserExists(String username) {
+        Map<String, Participant> userList = chatServer.getUserList();
+        Iterator it = userList.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry) it.next();
+            Participant participant = (Participant) pair.getValue();
+            if(participant.getUsername().equals(username)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String decryptMessage(DataInputStream dataInputStream) {
@@ -247,7 +248,7 @@ public class TransferThread implements Runnable {
                     fileName = infoSplit[2];
                     file = new File(fileName);
                     Participant participant = new Participant(username, ip, port, file);
-                    serverThread.setUserList(username, participant);
+                    chatServer.setUserList(username, participant);
                     addInfoToTable(participant);
                     JNotify.append(username + " has connected\n");
                     BroadcastMessage(username + ": has connnected\nEnter '/c GET LIST' if you want to update your participant list\n", username);
@@ -255,7 +256,7 @@ public class TransferThread implements Runnable {
                     break;
                 case "SHUTDOWN":
                     messageStr = decryptMessage(dataInputStream);
-                    serverThread.removeUser(messageStr);
+                    chatServer.removeUser(messageStr);
                     removeInfoFromTable(messageStr);
                     BroadcastMessage(messageStr + ": has disconnnected\nEnter '/c GET LIST' if you want to update your participant list\n", messageStr);
                     JNotify.append(messageStr + " has disconnected\n");
