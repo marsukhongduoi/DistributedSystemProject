@@ -11,16 +11,23 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Iterator;
 import java.util.Map;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.swing.JOptionPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.table.DefaultTableModel;
@@ -28,7 +35,7 @@ import model.*;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class TransferThread implements Runnable {
 
@@ -115,6 +122,31 @@ public class TransferThread implements Runnable {
         }
     }
 
+    void sendFile(File f, String mode, Socket socket) {
+        try {
+            int theByte = 0;
+            long filesize = f.length();
+            String fileName = f.getName();
+
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(socket.getOutputStream());
+            DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
+            FileInputStream fileInputStream = new FileInputStream(f);
+            BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream);
+
+            dataOutputStream.writeUTF(mode);
+            dataOutputStream.writeLong(filesize);
+            dataOutputStream.writeUTF(fileName);
+
+            while ((theByte = bufferedInputStream.read()) != -1) {
+                bufferedOutputStream.write(theByte);
+            }
+            bufferedOutputStream.flush();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(null, ex);
+            return;
+        }
+    }
+
     private void addInfoToTable(Participant p) {
         DefaultTableModel model = (DefaultTableModel) JTblUser.getModel();
         for (int i = 0; i < model.getRowCount(); i++) {
@@ -155,11 +187,29 @@ public class TransferThread implements Runnable {
         while (it.hasNext()) {
             Map.Entry pair = (Map.Entry) it.next();
             Participant participant = (Participant) pair.getValue();
-            if(participant.getUsername().equals(username)) {
+            if (participant.getUsername().equals(username)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private void createDir(String path) {
+        File file = new File(path);
+        file.mkdirs();
+    }
+
+    PublicKey setParticipantKey(byte[] keyBytes) {
+        PublicKey pubKey = null;
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            pubKey = keyFactory.generatePublic(new X509EncodedKeySpec(keyBytes));
+        } catch (NoSuchAlgorithmException ex) {
+
+        } catch (InvalidKeySpecException ex) {
+
+        }
+        return pubKey;
     }
 
     private String decryptMessage(DataInputStream dataInputStream) {
@@ -196,10 +246,15 @@ public class TransferThread implements Runnable {
     public void run() {
         try {
             BufferedInputStream bufferedInputStream = new BufferedInputStream(sock.getInputStream());
+            BufferedOutputStream bufferedOutputStream = null;
 
             DataInputStream dataInputStream = new DataInputStream(bufferedInputStream);
 
             File file = null;
+            File receivedFile = null;
+            File encryptedFile = null;
+
+            FileOutputStream fileOutputStream = null;
 
             String mode = dataInputStream.readUTF().toUpperCase();
             String username = "";
@@ -207,16 +262,24 @@ public class TransferThread implements Runnable {
             String info = "";
             String fileName = "";
             String ip = "";
+            String receivedDir = "Server\\file\\receivedFiles";
+            String decryptDir = "Server\\file\\decryptedFiles";
 
             String[] messageSplit = null;
             String[] infoSplit = null;
 
+            Participant specPart = null;
+
+            PublicKey participantKey = null;
+
             int port = -1;
+            int keyLength = -1;
             int messageLength = -1;
             long fileSize = 0;
 
             byte[] messageEnc;
             byte[] messageDec;
+            byte[] keyBytes;
 
             switch (mode) {
                 case "MESS":
@@ -234,6 +297,7 @@ public class TransferThread implements Runnable {
                     }
                     Thread.interrupted();
                     break;
+
                 case "INFORMATION":
                     //crypto
                     messageStr = decryptMessage(dataInputStream);
@@ -254,6 +318,7 @@ public class TransferThread implements Runnable {
                     BroadcastMessage(username + ": has connnected\nEnter '/c GET LIST' if you want to update your participant list\n", username);
                     Thread.interrupted();
                     break;
+
                 case "SHUTDOWN":
                     messageStr = decryptMessage(dataInputStream);
                     chatServer.removeUser(messageStr);
@@ -262,8 +327,49 @@ public class TransferThread implements Runnable {
                     JNotify.append(messageStr + " has disconnected\n");
                     Thread.interrupted();
                     break;
+
+                case "FILE":
+                    fileSize = dataInputStream.readLong();
+                    fileName = dataInputStream.readUTF();
+                    createDir(receivedDir);
+                    createDir(decryptDir);
+                    receivedFile = new File(receivedDir + "\\" + fileName);
+                    fileOutputStream = new FileOutputStream(receivedFile);
+                    bufferedOutputStream = new BufferedOutputStream(fileOutputStream);
+                    for (int i = 0; i < fileSize; i++) {
+                        bufferedOutputStream.write(bufferedInputStream.read());
+                    }
+                    bufferedOutputStream.flush();
+
+                    hostCrypto.decryptFile(receivedFile, new File(decryptDir + "\\" + fileName.split(".enc")[0]));
+                    sock.close();
+                    Thread.interrupted();
+                case "REQUEST":
+                    username = dataInputStream.readUTF();
+                    fileName = dataInputStream.readUTF();
+                    keyLength = dataInputStream.readInt();
+                    keyBytes = new byte[keyLength];
+                    dataInputStream.readFully(keyBytes, 0, keyLength);
+                    participantKey = setParticipantKey(keyBytes);
+                    JNotify.append("Get request from " + username + "\n");
+                    file = new File(decryptDir + "\\" + fileName);
+                    encryptedFile = hostCrypto.encryptFile(participantKey, file);
+                    specPart = chatServer.getSpecificUser(username);
+                    sendFile(encryptedFile, "FILE", new Socket(specPart.getIp(), specPart.getPort()));
+                    JNotify.append("Sending request file to " + username + "\n");
+                    break;
             }
         } catch (IOException ex) {
+            System.out.println(ex);
+        } catch (NoSuchAlgorithmException ex) {
+            System.out.println(ex);
+        } catch (NoSuchPaddingException ex) {
+            System.out.println(ex);
+        } catch (InvalidKeyException ex) {
+            System.out.println(ex);
+        } catch (IllegalBlockSizeException ex) {
+            System.out.println(ex);
+        } catch (BadPaddingException ex) {
             System.out.println(ex);
         }
     }

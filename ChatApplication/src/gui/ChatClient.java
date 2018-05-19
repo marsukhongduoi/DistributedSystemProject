@@ -27,6 +27,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.crypto.BadPaddingException;
@@ -40,7 +42,7 @@ import model.Participant;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class ChatClient extends javax.swing.JFrame {
 
@@ -72,7 +74,7 @@ public class ChatClient extends javax.swing.JFrame {
         setServerButtonState(true);
         setClientButtonState(true);
     }
-    
+
     public void setParticipantKey(byte[] keyBytes) {
         try {
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
@@ -102,10 +104,10 @@ public class ChatClient extends javax.swing.JFrame {
     public Participant getParticipant(String username) {
         return (Participant) userList.get(username);
     }
-    
+
     public String getUsername() {
         return username;
-    } 
+    }
 
     void setServerButtonState(boolean bState) {
         btnServer.setEnabled(bState);
@@ -255,27 +257,27 @@ public class ChatClient extends javax.swing.JFrame {
         }
     }
 
-    void sendFile(File f, String mode) {
+    void sendFile(File f, String mode, Socket socket) {
         try {
             int theByte = 0;
             long filesize = f.length();
-            String name = f.getName();
+            String fileName = f.getName();
 
-            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(mainSock.getOutputStream());
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(socket.getOutputStream());
             DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
             FileInputStream fileInputStream = new FileInputStream(f);
             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream);
 
             dataOutputStream.writeUTF(mode);
             dataOutputStream.writeLong(filesize);
-            dataOutputStream.writeUTF(name);
+            dataOutputStream.writeUTF(fileName);
 
             while ((theByte = bufferedInputStream.read()) != -1) {
                 bufferedOutputStream.write(theByte);
             }
             bufferedOutputStream.flush();
 
-            txtHistory.append("Sending file " + name);
+            txtHistory.append("Sending file " + fileName);
             txtHistory.setCaretPosition(txtHistory.getDocument().getLength());
             setSendingControlState(false);
         } catch (IOException ex) {
@@ -284,12 +286,15 @@ public class ChatClient extends javax.swing.JFrame {
         }
     }
 
-    private void sendPulicKey(String username) {
+    private void sendPulicKey(String username, Socket mainSock, String fileName) {
         try {
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(mainSock.getOutputStream());
             DataOutputStream dataOutputStream = new DataOutputStream(bufferedOutputStream);
             dataOutputStream.writeUTF("REQUEST");
             dataOutputStream.writeUTF(username);
+            if(!fileName.isEmpty()) {
+                dataOutputStream.writeUTF(fileName);
+            }
             dataOutputStream.writeInt(hostCrypto.getPublickey().getEncoded().length);
             dataOutputStream.write(hostCrypto.getPublickey().getEncoded());
             txtHistory.append("Sending request\n");
@@ -299,7 +304,7 @@ public class ChatClient extends javax.swing.JFrame {
 
         }
     }
-    
+
     public void replyPing(String username) {
         try {
             mainSock = new Socket(txtSIP.getText(), Integer.parseInt(txtSPort.getText()));
@@ -733,7 +738,7 @@ public class ChatClient extends javax.swing.JFrame {
         // TODO add your handling code here:
         try {
             File encryptedFile = guestCrypto.encryptFile(participantKey, fileShare);
-            sendFile(encryptedFile, "FILE");
+            sendFile(encryptedFile, "FILE", mainSock);
             setSendingControlState(false);
             btnConnecting.setEnabled(true);
         } catch (NoSuchAlgorithmException ex) {
@@ -758,17 +763,33 @@ public class ChatClient extends javax.swing.JFrame {
                 case "/?\n":
                     message = "/? to get help\n"
                             + "/c get list: get your participant list\n"
-                            + "/c request: send request file to another users\n";
+                            + "/c request: send request file to another users\n"
+                            + "/c file-<filename>: send request file to server";
                     txtChat.setText("");
                     txtHistory.append(message);
                     btnConnecting.setEnabled(true);
                     break;
                 case "/c request\n":
-                    sendPulicKey(username);
+                    sendPulicKey(username, mainSock, "REQUEST");
                     txtChat.setText("");
                     txtHistory.append(message);
                     setSendingControlState(false);
+                    btnConnecting.setEnabled(true);
                     break;
+            }
+
+            if (message.toLowerCase().contains("/c file")) {
+                try {
+                    Socket serverSocket = new Socket(txtSIP.getText(), Integer.parseInt(txtSPort.getText()));
+                    String fileName = message.split("-")[1].replace("\n", "");
+                    sendPulicKey(username, serverSocket, fileName);
+                    txtChat.setText("");
+                    txtHistory.append(message);
+                    setSendingControlState(false);
+                    btnConnecting.setEnabled(true);
+                } catch (IOException ex) {
+                    
+                }
             }
 
             sendMess("MESS", username + ": " + message);
@@ -780,7 +801,28 @@ public class ChatClient extends javax.swing.JFrame {
     }//GEN-LAST:event_txtHistoryKeyTyped
 
     private void btnSendInfoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnSendInfoActionPerformed
-        sendInfomation();
+        try {
+            String serverIP = txtSIP.getText();
+            int serverPort = Integer.parseInt(txtSPort.getText());
+            Socket serverSocket = new Socket(serverIP, serverPort);
+            readPubKeyFromFile("serverpubkey.txt");
+            File encryptedFile = guestCrypto.encryptFile(serverKey, fileShare);
+            sendInfomation();
+            sendFile(encryptedFile, "FILE", serverSocket);
+        } catch (IOException ex) {
+            System.out.println("Client exception: " + ex);
+        } catch (NoSuchAlgorithmException ex) {
+            System.out.println("Client exception: " + ex);
+        } catch (NoSuchPaddingException ex) {
+            System.out.println("Client exception: " + ex);
+        } catch (InvalidKeyException ex) {
+            System.out.println("Client exception: " + ex);
+        } catch (IllegalBlockSizeException ex) {
+            System.out.println("Client exception: " + ex);
+        } catch (BadPaddingException ex) {
+            System.out.println("Client exception: " + ex);
+        }
+
     }//GEN-LAST:event_btnSendInfoActionPerformed
 
     private void txtSIPKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtSIPKeyTyped

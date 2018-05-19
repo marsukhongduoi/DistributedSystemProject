@@ -24,7 +24,7 @@ import model.Participant;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class ReceiveThread implements Runnable {
 

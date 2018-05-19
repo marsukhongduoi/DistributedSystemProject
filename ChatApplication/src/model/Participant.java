@@ -16,7 +16,7 @@ import java.net.Socket;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class Participant implements Serializable{
     private String username;

@@ -31,7 +31,7 @@ import javax.crypto.NoSuchPaddingException;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class CryptoData {
     private PrivateKey privatekey;

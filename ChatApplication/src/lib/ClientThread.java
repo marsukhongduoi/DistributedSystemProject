@@ -16,7 +16,7 @@ import model.Participant;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class ClientThread implements Runnable {
     

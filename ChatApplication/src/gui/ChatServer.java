@@ -28,7 +28,7 @@ import model.Participant;
 
 /**
  *
- * @author Daniel
+ * @author Titan
  */
 public class ChatServer extends javax.swing.JFrame {
 
